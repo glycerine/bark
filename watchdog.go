@@ -11,13 +11,15 @@ import (
 )
 
 type Watchdog struct {
-	Ready                    chan bool
-	RestartChild             chan bool
-	ReqStopWatchdog          chan bool
-	TermChildAndStopWatchdog chan bool
-	Done                     chan bool
-	CurrentPid               chan int
-	curPid                   int
+	Ready                       chan bool
+	RestartChild                chan bool
+	ReqStopWatchdog             chan bool
+	TermChildAndStopWatchdog    chan bool
+	Done                        chan bool
+	CurrentPid                  chan int
+	StopWatchdogAfterChildExits chan bool
+
+	curPid int
 
 	startCount int64
 
@@ -52,11 +54,12 @@ func NewWatchdog(
 	}
 	w := &Watchdog{
 		PathToChildExecutable: pathToChildExecutable,
-		Args:                     cpOfArgs,
-		Ready:                    make(chan bool),
-		RestartChild:             make(chan bool),
-		ReqStopWatchdog:          make(chan bool),
-		TermChildAndStopWatchdog: make(chan bool),
+		Args:                        cpOfArgs,
+		Ready:                       make(chan bool),
+		RestartChild:                make(chan bool),
+		ReqStopWatchdog:             make(chan bool),
+		TermChildAndStopWatchdog:    make(chan bool),
+		StopWatchdogAfterChildExits: make(chan bool),
 		Done:       make(chan bool),
 		CurrentPid: make(chan int),
 	}
@@ -65,6 +68,49 @@ func NewWatchdog(
 		w.Attr = *attr
 	}
 	return w
+}
+
+// NewOneshotReaper() is just like NewWatchdog,
+// except that it also does two things:
+//
+// a) sets a flag so that the
+// watchdog won't restart the child process
+// after it finishes.
+//
+// and
+//
+// b) the watchdog goroutine will itself exit
+// once the child exists--after cleaning up.
+// Cleanup means we don't leave
+// zombies and we call go's os.Process.Release() to
+// release associated resources after the child
+// exits.
+//
+// You still need to call Start(), just like
+// after NewWatchdog().
+//
+func NewOneshotReaper(
+	attr *os.ProcAttr,
+	pathToChildExecutable string,
+	args ...string) *Watchdog {
+
+	w := NewWatchdog(attr, pathToChildExecutable, args...)
+	w.exitAfterReaping = true
+	return w
+}
+
+// Oneshot() combines NewOneshotReaper() and Start().
+// In other words, we start the child once. We don't
+// restart once it finishes. Instead we just reap and
+// cleanup. The returned pointer's Done channel will
+// be closed when the child process and watchdog
+// goroutine have finished.
+func Oneshot(pathToProcess string, args ...string) (*Watchdog, error) {
+
+	watcher := NewOneshotReaper(nil, pathToProcess, args...)
+	watcher.Start()
+
+	return watcher, nil
 }
 
 // StartAndWatch() is the convenience/main entry API.
@@ -165,6 +211,8 @@ func (w *Watchdog) Start() {
 			}
 
 			select {
+			case <-w.StopWatchdogAfterChildExits:
+				w.exitAfterReaping = true
 			case w.CurrentPid <- w.curPid:
 			case <-w.TermChildAndStopWatchdog:
 				Q(" TermChildAndStopWatchdog noted, exiting watchdog.Start() loop")
