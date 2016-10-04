@@ -88,3 +88,22 @@ func Test300OneshotReaperTerminatesUponRequest(t *testing.T) {
 		P("shutdown complete")
 	})
 }
+
+func Test500OneshotAndWaitGetsExitCodesCorrectly(t *testing.T) {
+
+	cv.Convey("our OneshotAndWait goroutine should return our child's exit code", t, func() {
+
+		exitCode, _ := OneshotAndWait("./testcmd/exit42", 0)
+		fmt.Printf("from exit42, we got 0x%x\n", exitCode)
+		cv.So(exitCode, cv.ShouldEqual, 42<<8)
+
+		exitCode, _ = OneshotAndWait("./testcmd/exit44", 0)
+		cv.So(exitCode, cv.ShouldEqual, 44<<8)
+
+		exitCode, _ = OneshotAndWait("./testcmd/exit43", 0)
+		cv.So(exitCode, cv.ShouldEqual, 43<<8)
+
+		exitCode, _ = OneshotAndWait("./testcmd/exit0", 0)
+		cv.So(exitCode, cv.ShouldEqual, 0)
+	})
+}

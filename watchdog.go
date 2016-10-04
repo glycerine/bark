@@ -1,6 +1,7 @@
 package bark
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,7 @@ type Watchdog struct {
 	Done                        chan bool
 	CurrentPid                  chan int
 	StopWatchdogAfterChildExits chan bool
+	ExitCode                    int
 
 	curPid int
 
@@ -111,6 +113,31 @@ func Oneshot(pathToProcess string, args ...string) (*Watchdog, error) {
 	watcher.Start()
 
 	return watcher, nil
+}
+
+var TimedOut = errors.New("TimedOut")
+
+// OneshotAndWait runs the command pathToProcess with the
+// given args, and returns the exit code of the process.
+// You may need to divide the exit code by 256 to get what you
+// expect, at least on OSX.
+//
+// With timeOut of 0 we wait forever and return the
+// exitcode and an error of nil. Otherwise we return
+// 0 and the TimedOut error if we timed-out waiting
+// for the child process to finish.
+func OneshotAndWait(pathToProcess string, timeOut time.Duration, args ...string) (int, error) {
+	w, _ := Oneshot(pathToProcess, args...)
+	if timeOut > 0 {
+		select {
+		case <-time.After(timeOut):
+			return 0, TimedOut
+		case <-w.Done:
+		}
+	} else {
+		<-w.Done
+	}
+	return w.ExitCode, nil
 }
 
 // StartAndWatch() is the convenience/main entry API.
@@ -241,7 +268,7 @@ func (w *Watchdog) Start() {
 				w.curPid = 0
 				continue reaploop
 			case <-signalChild:
-				Q(" debug: got <-signalChild")
+				Q(" debug: got <-signalChild, ws is %#v", ws)
 
 				for i := 0; i < 1000; i++ {
 					pid, err := syscall.Wait4(w.proc.Pid, &ws, syscall.WNOHANG, nil)
@@ -251,7 +278,7 @@ func (w *Watchdog) Start() {
 					// pid -1 && errno == ECHILD => no new status children
 					// pid -1 && errno != ECHILD => syscall interupped by signal
 					// pid == 0 => no more children to wait for.
-					Q(" pid=%v  ws=%v and err == %v", pid, ws, err)
+					Q(" pid=%v  ws=%#v and err == %v", pid, ws, err)
 					switch {
 					case err != nil:
 						err = fmt.Errorf("wait4() got error back: '%s' and ws:%v", err, ws)
@@ -259,7 +286,8 @@ func (w *Watchdog) Start() {
 						w.SetErr(err)
 						continue reaploop
 					case pid == w.proc.Pid:
-						Q(" Watchdog saw OUR current w.proc.Pid %d/process '%s' finish with waitstatus: %v.", pid, w.PathToChildExecutable, ws)
+						Q(" Watchdog saw OUR current w.proc.Pid %d/process '%s' finish with waitstatus: %#v.", pid, w.PathToChildExecutable, ws)
+						w.ExitCode = int(ws)
 						if w.exitAfterReaping {
 							Q("watchdog sees exitAfterReaping. exiting now.")
 							return
