@@ -33,7 +33,8 @@ func detectSystem() {
 	o, err := c.Output()
 
 	if err == nil {
-		Sysname = strings.Trim(string(o), " \n\t")
+		Sysname = strings.Trim(string(o), " \n\t\r")
+		P("Sysname = '%v'", Sysname)
 	}
 }
 

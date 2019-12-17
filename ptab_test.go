@@ -2,12 +2,18 @@ package bark
 
 import (
 	"os"
+	"runtime"
 	"testing"
 
 	cv "github.com/glycerine/goconvey/convey"
 )
 
 func TestProcessTable(t *testing.T) {
+
+	if runtime.GOOS == "windows" {
+		// not implemented on windows (yet). use github.com/mitchellh/go-ps instead.
+		return
+	}
 
 	cv.Convey("Sanity check ProcessTable(): ProcessTable should give us a map of length > 2", t, func() {
 		cv.Convey("and should contain our and our parents pid", func() {

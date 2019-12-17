@@ -25,8 +25,10 @@ func ts() string {
 // time-stamped printf
 func TSPrintf(format string, a ...interface{}) {
 	fmt.Printf("%s ", ts())
-	fmt.Printf(format, a...)
+	fmt.Printf(format+"\n", a...)
 }
+
+var vv = TSPrintf
 
 func VPrintf(format string, a ...interface{}) {
 	if Verbose {
