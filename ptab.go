@@ -2,6 +2,7 @@ package bark
 
 import (
 	"fmt"
+	ps "github.com/mitchellh/go-ps"
 	"io/ioutil"
 	"os/exec"
 	"regexp"
@@ -34,19 +35,20 @@ func detectSystem() {
 
 	if err == nil {
 		Sysname = strings.Trim(string(o), " \n\t\r")
-		P("Sysname = '%v'", Sysname)
+		//P("Sysname = '%v'", Sysname) // "CYGWIN_NT-10.0" possible.
 	}
 }
 
 func ProcessTable() *map[int]bool {
-	switch Sysname {
-	case "Linux":
-		return LinuxPs()
-
-	case "Darwin":
-		return DarwinPs()
+	// use the more portable library "github.com/mitchellh/go-ps" now
+	ps, err := ps.Processes()
+	if err != nil {
+		panic(err)
 	}
 	m := make(map[int]bool)
+	for pp := range ps {
+		m[ps[pp].Pid()] = true
+	}
 	return &m
 }
 
@@ -237,14 +239,15 @@ func WaitForShutdownWithTimeout(pid int, timeout time.Duration) error {
 	t0 := time.Now()
 	for {
 		pt := *ProcessTable()
-		Q("pt = %#v\n", pt)
+		//P("pt = %#v\n", pt)
 		_, alive := pt[pid]
 		if !alive {
-			Q("pid %d done after %d waits.\n", pid, waited)
+			//P("pid %d done after %d waits.\n", pid, waited)
 			return nil
 		}
-		Q("pid %d is still alive...\n", pid)
+		//P("pid %d is still alive...\n", pid)
 		time.Sleep(10 * time.Millisecond)
+		//time.Sleep(1000 * time.Millisecond)
 		waited++
 		if time.Since(t0) > timeout {
 			return fmt.Errorf("pid %d did not disappear from process table", pid)

@@ -26,8 +26,11 @@ func Test100WatchdogShouldNoticeAndRestartChild(t *testing.T) {
 				fmt.Printf("\n testOver timeout fired.\n")
 				err = watcher.Stop()
 				break testloop
-			case <-time.After(3 * time.Millisecond):
-				VPrintf("watch_test: after 3 milliseconds: requesting restart of child process.\n")
+
+				// 3 msec can overwhelm darwin, lets try 300 msec. get 18 starts on darwin.
+				//case <-time.After(3 * time.Millisecond):
+			case <-time.After(300 * time.Millisecond):
+				VPrintf("watch_test: after 300 milliseconds: requesting restart of child process.\n")
 				watcher.RestartChild <- true
 			case <-watcher.Done:
 				fmt.Printf("\n watcher.Done fired.\n")
@@ -53,18 +56,23 @@ func Test200WatchdogTerminatesUponRequest(t *testing.T) {
 		sleepDur := 10 * time.Millisecond
 		time.Sleep(sleepDur)
 
+		//P("getting pid")
 		pid := <-watcher.CurrentPid
+		//P("back from getting pid")
 		if pid <= 0 {
 			panic("error: pid was <= 0 implying process did not start")
 		}
 
+		//P("about to send term request")
 		watcher.TermChildAndStopWatchdog <- true
+		//P("done sending term request")
 		err := WaitForShutdownWithTimeout(pid, time.Millisecond*100)
 		panicOn(err)
+		//P("done with wait for shutdown")
 		cv.So(err, cv.ShouldEqual, nil)
 
 		<-watcher.Done
-		P("shutdown complete")
+		//P("shutdown complete")
 	})
 }
 
@@ -88,7 +96,7 @@ func Test300OneshotReaperTerminatesUponRequest(t *testing.T) {
 		case <-watcher.Done:
 			// okay.
 		}
-		P("shutdown complete")
+		//P("shutdown complete")
 	})
 }
 

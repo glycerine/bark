@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -22,17 +23,20 @@ func (w *Watchdog) Start() {
 	var ws syscall.WaitStatus
 	go func() {
 		defer func() {
+			//vv("defer running, finish up Start().")
 			if w.proc != nil {
 				w.proc.Release()
 			}
 			close(w.Done)
 			// can deadlock if we don't close(w.Done) before grabbing the mutex:
+			close(w.CurrentPid) // avoid racey stall if someone asks for w.CurrentPid after we finish.
 			w.mut.Lock()
 			w.shutdown = true
 			w.mut.Unlock()
 			signal.Stop(signalChild) // reverse the effect of the above Notify()
 		}()
 		var err error
+		resourceTempUnavail := 0
 
 	reaploop:
 		for {
@@ -40,22 +44,43 @@ func (w *Watchdog) Start() {
 				if w.proc != nil {
 					w.proc.Release()
 				}
-				Q(" debug: about to start '%s'", w.PathToChildExecutable)
+				//P(" debug: about to start '%s'", w.PathToChildExecutable)
 				w.proc, err = os.StartProcess(w.PathToChildExecutable, w.Args, &w.Attr)
+
+				// this happens after test 100 that fork bombs/starts and kills new processes
+				// quickly, exhausting the kernel momentarily. So we try and give
+				// darwin a little sleep to let it catch up on pid accounting.
+				//
+				//panicOn(err) // darwin: panic: fork/exec ./testcmd/sleep50: resource temporarily unavailable
 				if err != nil {
+					vv("err = '%v'", err)
+					if strings.Contains(err.Error(), "resource temporarily unavailable") {
+						resourceTempUnavail++
+						vv("resourceTempUnavail = %v", resourceTempUnavail)
+						if resourceTempUnavail <= 10 {
+							// try again in a second
+							time.Sleep(1000 * time.Millisecond)
+							continue reaploop
+						} else {
+							panic(fmt.Sprintf("system seems to be out of resources: "+
+								"got 10 of these errors over 10 seconds: '%v'", err))
+						}
+					}
 					w.err = err
 					return
 				}
+				resourceTempUnavail = 0
 				w.curPid = w.proc.Pid
 				w.needRestart = false
 				w.startCount++
-				Q(" Start number %d: Watchdog started pid %d / new process '%s'", w.startCount, w.proc.Pid, w.PathToChildExecutable)
+				//P(" Start number %d: Watchdog started pid %d / new process '%s'", w.startCount, w.proc.Pid, w.PathToChildExecutable)
 			}
 
 			select {
 			case <-w.StopWatchdogAfterChildExits:
 				w.exitAfterReaping = true
 			case w.CurrentPid <- w.curPid:
+				P("sent requested pid '%v'", w.curPid)
 			case <-w.TermChildAndStopWatchdog:
 				Q(" TermChildAndStopWatchdog noted, exiting watchdog.Start() loop")
 
