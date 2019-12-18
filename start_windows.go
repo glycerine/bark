@@ -39,7 +39,7 @@ func (w *Watchdog) Start() {
 				if w.proc != nil {
 					w.proc.Release()
 				}
-				Q(" debug: about to start '%s'", w.PathToChildExecutable)
+				//Q(" debug: about to start '%s'", w.PathToChildExecutable)
 
 				//vv("see if we can actually execute cmd under cygwin:")
 				var c *exec.Cmd
