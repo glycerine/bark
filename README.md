@@ -24,7 +24,9 @@ what bark provides
 
 The bark library provides the ability to monitor a child process, to automatically restart it if it fails, and to shut it down (SIGKILL or kill -9) upon request.
 
-Simple and fast.
+Simple and fast (on Linux and Darwin/OSX/MacOS).
+
+Windows is working as of v1.0.0 and uses CommandContext and context-based cancellation to kill processes.
 
 ### use / example
 
