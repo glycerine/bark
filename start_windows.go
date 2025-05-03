@@ -86,7 +86,8 @@ func (w *Watchdog) Start() {
 						if exitErr, ok := err.(*exec.ExitError); ok {
 							// Get the exit code from the ExitError
 							if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-								w.ExitCode = status.ExitStatus()
+								// On Windows, exit codes are shifted left by 8 bits
+								w.ExitCode = status.ExitStatus() << 8
 							}
 						}
 					} else {
