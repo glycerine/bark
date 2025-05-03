@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
 	//"os/exec"
 	//"runtime"
 	//"strings"
@@ -35,6 +36,7 @@ type Watchdog struct {
 	needRestart           bool
 	proc                  *os.Process
 	exitAfterReaping      bool
+	isPrivileged          bool // Whether this is a privileged watchdog
 }
 
 // NewWatchdog creates a Watchdog structure but
@@ -71,6 +73,7 @@ func NewWatchdog(
 		StopWatchdogAfterChildExits: make(chan bool),
 		Done:                        make(chan bool),
 		CurrentPid:                  make(chan int),
+		isPrivileged:                false,
 	}
 
 	if attr != nil {
@@ -97,7 +100,6 @@ func NewWatchdog(
 //
 // You still need to call Start(), just like
 // after NewWatchdog().
-//
 func NewOneshotReaper(
 	attr *os.ProcAttr,
 	pathToChildExecutable string,

@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package bark
@@ -8,8 +9,12 @@ import (
 	//"log"
 	"os/exec"
 	"strings"
-	//"syscall"
+	"syscall"
 	"time"
+)
+
+const (
+	CREATE_NEW_CONSOLE = 0x00000010
 )
 
 // see w.err for any error after w.Done
@@ -55,6 +60,16 @@ func (w *Watchdog) Start() {
 					//vv("running raw")
 					c = exec.CommandContext(ctx, w.PathToChildExecutable, w.Args...)
 				}
+
+				// Set up process creation flags for elevated privileges if needed
+				if w.isPrivileged {
+					c.SysProcAttr = &syscall.SysProcAttr{
+						CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | CREATE_NEW_CONSOLE,
+						// Use the current process's token for elevation
+						Token: syscall.Token(0),
+					}
+				}
+
 				err = c.Start()
 				if err != nil {
 					w.err = err

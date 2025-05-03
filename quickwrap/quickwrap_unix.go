@@ -1,12 +1,11 @@
-//go:build windows
-// +build windows
+//go:build !windows
+// +build !windows
 
 package main
 
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/glycerine/bark"
 )
@@ -20,17 +19,8 @@ func main() {
 	cmd := os.Args[1]
 	args := os.Args[2:]
 
-	var w *bark.Watchdog
-	var err error
-
-	if runtime.GOOS == "windows" {
-		// On Windows, use privileged functions for elevated processes
-		w, err = bark.StartPrivilegedAndWatch(cmd, args...)
-	} else {
-		// On other platforms, use standard functions
-		w, err = bark.StartAndWatch(cmd, args...)
-	}
-
+	// On non-Windows platforms, use standard functions
+	w, err := bark.StartAndWatch(cmd, args...)
 	if err != nil {
 		fmt.Printf("Error starting process: %v\n", err)
 		os.Exit(1)
