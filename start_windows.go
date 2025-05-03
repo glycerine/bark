@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	CREATE_NEW_CONSOLE = 0x00000010
+	CREATE_NO_WINDOW = 0x08000000
 )
 
 // see w.err for any error after w.Done
@@ -64,7 +64,7 @@ func (w *Watchdog) Start() {
 				// Set up process creation flags for elevated privileges if needed
 				if w.isPrivileged {
 					c.SysProcAttr = &syscall.SysProcAttr{
-						CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | CREATE_NEW_CONSOLE,
+						CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
 						// Use the current process's token for elevation
 						Token: syscall.Token(0),
 					}
@@ -81,7 +81,18 @@ func (w *Watchdog) Start() {
 
 				go func(c *exec.Cmd) {
 					//vv("goro is about to c.Wait() on child to finish")
-					c.Wait()
+					err := c.Wait()
+					if err != nil {
+						if exitErr, ok := err.(*exec.ExitError); ok {
+							// Get the exit code from the ExitError
+							if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+								w.ExitCode = status.ExitStatus()
+							}
+						}
+					} else {
+						// Process exited normally
+						w.ExitCode = 0
+					}
 					//vv("child Wait() done")
 					childFini <- true
 					//vv("child wait finished for c.Process.Pid='%v'", c.Process.Pid)
