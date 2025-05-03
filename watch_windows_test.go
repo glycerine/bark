@@ -4,7 +4,6 @@
 package bark
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -59,7 +58,6 @@ func TestPrivilegedOneshotAndWait(t *testing.T) {
 	cv.Convey("our PrivilegedOneshotAndWait should be able to run and monitor privileged processes", t, func() {
 		exitCode, err := PrivilegedOneshotAndWait("./testcmd/exit42", 0)
 		panicOn(err)
-		fmt.Printf("from exit42, we got 0x%x\n", exitCode)
 		cv.So(exitCode, cv.ShouldEqual, 42<<8)
 
 		exitCode, err = PrivilegedOneshotAndWait("./testcmd/exit44", 0)
